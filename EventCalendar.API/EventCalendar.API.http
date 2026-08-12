@@ -1,0 +1,6 @@
+@EventCalendar.API_HostAddress = http://localhost:5115
+
+GET {{EventCalendar.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

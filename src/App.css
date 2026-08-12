@@ -1,0 +1,88 @@
+/* EventCalendar Styles */
+
+.app-container {
+  padding: 20px;
+}
+
+.calendar-container {
+  max-width: none; /* Removed width limit to allow days to spread across full available space */
+  margin: 0 auto;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 10px;
+}
+
+.calendar-header h2 {
+  margin: 0;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 20px; /* Increased from 6px to 20px for wider day cells */
+  width: 100%;
+}
+
+.day-header {
+  font-weight: bold;
+  color: var(--text-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.calendar-day {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 0; /* Vertical padding for content, no horizontal padding */
+  min-height: 120px; /* Increased height to accommodate more events */
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.calendar-day[data-prev-month],
+.calendar-day[data-next-month] {
+  border: 2px solid var(--border);
+  min-height: 100px; /* Slightly shorter for empty cells */
+}
+
+.day-number {
+  font-weight: bold;
+  color: var(--text-h);
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.calendar-day[data-prev-month] .day-number,
+.calendar-day[data-next-month] .day-number {
+  color: var(--text-h);
+}
+
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* Increased vertical gap between events for better spacing */
+  flex: 1; /* Take remaining space in day cell */
+  overflow-y: auto; /* Scroll if too many events */
+  min-height: 0; /* Allow flex child to shrink */
+}
+
+.event-card {
+  background: var(--accent-bg);
+  border-radius: 6px;
+  padding: 8px;
+  border-left: 3px solid var(--accent);
+  margin-bottom: 2px; /* Slight gap between events */
+}
+
+/* Calendar Date Input */
+input[type="date"] {
+  font-family: inherit;
+}
