@@ -28,3 +28,21 @@ During the development of the Event Calendar project, several key insights were 
 ## 6. Task Tracking & Progress Updates
 - **task_progress Parameter**: Always include the `task_progress` parameter when using file manipulation tools (`write_to_file`, `replace_in_file`, `attempt_completion`). This keeps a checklist of completed steps and provides visibility into what has been accomplished.
 - **Complete Tasks Before Completion**: Do not call `attempt_completion` until all user-requested tasks are verified as successful. Confirm each step (e.g., "file created," "line removed") before marking the overall task complete.
+
+## 7. Tool-Specific Patterns Observed
+
+### write_to_file Behavior
+- When content is successfully saved, the tool returns confirmation with the final file content in a `<final_file_content>` block.
+- The `task_progress` parameter should reflect completion status after the operation.
+- Always reference the provided `final_file_content` for any future SEARCH/REPLACE operations on that file.
+
+### replace_in_file Error Handling
+- If a SEARCH block doesn't match exactly, the tool returns an error and reverts the file to its original state.
+- The error message includes the exact file content at the time of failure for reference.
+- When encountering repeated failures with `replace_in_file`, fall back to `write_to_file` for a complete rewrite.
+
+### attempt_completion Flow
+- This tool is used to signal task completion after all user-requested operations have succeeded.
+- Provide a clear description of results in the `result` parameter.
+- The `task_progress` parameter should show all checklist items marked as "DONE".
+- Do not use this tool until every file operation has been confirmed successful by the environment.
