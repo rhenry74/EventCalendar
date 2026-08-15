@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Security.Claims;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using System.Text.Json;
+using System.Threading.Tasks;
 using EventCalendar.API.Data;
+using Microsoft.AspNetCore.Authentication;
 
 namespace EventCalendar.API.Controllers;
 
@@ -23,10 +26,10 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
-    public IActionResult Login([FromForm] LoginRequest request)
+    public async Task<IActionResult> Login([FromForm] LoginRequest request)
     {
         // Sign out existing session if any
-        HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).Wait();
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
         // Redirect to Google OAuth
         var redirectUrl = $"https://accounts.google.com/o/oauth2/v2/auth?client_id={request.ClientId}&redirect_uri={request.RedirectUri}&scope=openid%20email%20profile&response_type=code&state={request.State}";
@@ -45,9 +48,9 @@ public class AuthController : ControllerBase
         try
         {
             // Exchange authorization code for tokens using Microsoft.Identity.Web
-            var tokenResponse = await AuthenticationProperties.CreateRedirectCallback().ExecuteAsync(new[] { request.Code });
+            var authenticateResult = await AuthenticationHttpContextExtensions.AuthenticateAsync(HttpContext, request.State);
             
-            if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
+            if (!authenticateResult.Succeeded || string.IsNullOrEmpty(authenticateResult.Principal?.Claims.FirstOrDefault(c => c.Type == "access_token")?.Value))
             {
                 return Unauthorized();
             }
@@ -71,26 +74,30 @@ public class AuthController : ControllerBase
 
             if (success)
             {
-                // Set cookie with JWT token using Microsoft.Identity.Web
-                var jwtTokenHandler = new JwtSecurityTokenHandler();
-                var jwtTokenReader = new JwtSecurityToken(jwtTokenHandler.ReadJwtToken(tokenResponse.AccessToken));
-                string tokenId = jwtTokenReader.Claims.First(c => c.Type == "tid").Value;
+                // Use access token directly as the cookie value for stateless auth
+                var accessTokenClaim = authenticateResult.Principal?.Claims.FirstOrDefault(c => c.Type == "access_token");
+                string? accessToken = accessTokenClaim?.Value;
                 
+                if (string.IsNullOrEmpty(accessToken))
+                {
+                    return Unauthorized();
+                }
+
                 HttpContext.Response.Cookies.Append(
                     CookieAuthenticationDefaults.CookiePrefix + "jwt", 
-                    tokenId, 
+                    accessToken, 
                     new CookieOptions
                     {
                         HttpOnly = true,
                         Secure = true,
                         SameSite = SameSiteMode.Lax,
-                        Expires = TimeSpan.FromHours(24)
+                        Expires = DateTimeOffset.UtcNow.AddHours(24)
                     }
                 );
 
-                // Redirect to frontend
-                var redirectUri = $"{request.RedirectUri}?token={tokenId}";
-                return Ok(new { Token = tokenId, RedirectUrl = redirectUri });
+                // Redirect to frontend with access token
+                var redirectUri = $"{request.RedirectUri}?token={accessToken}";
+                return Ok(new { Token = accessToken, RedirectUrl = redirectUri });
             }
         }
         catch (Exception ex)
@@ -141,24 +148,25 @@ public class AuthController : ControllerBase
         return Ok(users);
     }
 
-    [HttpDelete("logout")]
-    [Authorize]
-    public async Task<IActionResult> Logout()
-    {
-        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        
-        // Clear JWT cookie
-        var jwtCookie = Request.Cookies[CookieAuthenticationDefaults.CookiePrefix + "jwt"];
-        if (!string.IsNullOrEmpty(jwtCookie))
+        [HttpDelete("logout")]
+        [Authorize]
+        public async Task<IActionResult> Logout()
         {
-            Response.Cookies.Delete(CookieAuthenticationDefaults.CookiePrefix + "jwt", new CookieOptions
+            // Clear JWT cookie
+            var jwtCookie = Request.Cookies[CookieAuthenticationDefaults.CookiePrefix + "jwt"];
+            if (!string.IsNullOrEmpty(jwtCookie))
             {
-                Expires = TimeSpan.FromHours(-1)
-            });
-        }
+                Response.Cookies.Delete(CookieAuthenticationDefaults.CookiePrefix + "jwt", new CookieOptions
+                {
+                    Expires = DateTimeOffset.UtcNow.AddHours(-1)
+                });
+            }
 
-        return Ok(new { Message = "Logged out successfully" });
-    }
+            // Sign out from cookie authentication scheme
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            return Ok(new { Message = "Logged out successfully" });
+        }
 }
 
 // Request models for AuthController

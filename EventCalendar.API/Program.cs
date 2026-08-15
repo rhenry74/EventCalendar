@@ -19,10 +19,6 @@ namespace EventCalendar.API;
 // Import types from Data folder
 using EventCalendar.API.Data;
 
-// Add using for cookie options and JWT handling
-using Microsoft.AspNetCore.Http.Extensions;
-using System.IdentityModel.Tokens.Jwt;
-
 public class Program
 {
     public static void Main(string[] args)
@@ -83,9 +79,9 @@ public class Program
             try
             {
                 // Exchange authorization code for tokens using Microsoft.Identity.Web
-                var tokenResponse = await AuthenticationProperties.CreateRedirectCallback(request.Code).ExecuteAsync();
+                var authenticateResult = await AuthenticationHttpContextExtensions.AuthenticateAsync(context, request.State);
                 
-                if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
+                if (!authenticateResult.Succeeded || string.IsNullOrEmpty(authenticateResult.Principal?.Claims.FirstOrDefault(c => c.Type == "access_token")?.Value))
                 {
                     return Results.Unauthorized();
                 }
@@ -109,14 +105,18 @@ public class Program
 
                 if (success)
                 {
-                    // Set cookie with JWT token using Microsoft.Identity.Web
-                    var jwtTokenHandler = new JwtSecurityTokenHandler();
-                    var jwtTokenReader = new JwtSecurityToken(jwtTokenHandler.ReadJwtToken(tokenResponse.AccessToken));
-                    string tokenId = jwtTokenReader.Claims.First(c => c.Type == "tid").Value;
+                    // Use access token directly as the cookie value for stateless auth
+                    var accessTokenClaim = authenticateResult.Principal?.Claims.FirstOrDefault(c => c.Type == "access_token");
+                    string? accessToken = accessTokenClaim?.Value;
                     
+                    if (string.IsNullOrEmpty(accessToken))
+                    {
+                        return Results.Unauthorized();
+                    }
+
                     context.Response.Cookies.Append(
                         CookieAuthenticationDefaults.CookiePrefix + "jwt", 
-                        tokenId, 
+                        accessToken, 
                         new CookieOptions
                         {
                             HttpOnly = true,
@@ -126,9 +126,9 @@ public class Program
                         }
                     );
 
-                    // Redirect to frontend
-                    var redirectUri = $"{request.RedirectUri}?token={tokenId}";
-                    return Results.Ok(new { Token = tokenId, RedirectUrl = redirectUri });
+                    // Redirect to frontend with access token
+                    var redirectUri = $"{request.RedirectUri}?token={accessToken}";
+                    return Results.Ok(new { Token = accessToken, RedirectUrl = redirectUri });
                 }
             }
             catch (Exception ex)
@@ -154,26 +154,4 @@ public class CallbackRequest
     public string Code { get; set; } = "";
     public string RedirectUri { get; set; } = "";
     public string State { get; set; } = "";
-}
-
-// User model with Picture property
-public class User
-{
-    public string Id { get; set; } = "";
-    public string Subject { get; set; } = "";
-    public string DisplayName { get; set; } = "";
-    public string Email { get; set; } = "";
-    public string? Picture { get; set; }
-}
-
-// Event model with OwnerId property
-public class Event
-{
-    public string Id { get; set; } = "";
-    public string Title { get; set; } = "";
-    public string Description { get; set; } = "";
-    public DateTime StartTime { get; set; }
-    public DateTime EndTime { get; set; }
-    public string Location { get; set; } = "";
-    public string OwnerId { get; set; } = "";
 }

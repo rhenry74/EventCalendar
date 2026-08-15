@@ -55,8 +55,8 @@ public class EventStore
             events.RemoveAll(e => e.Id == eventItem.Id);
             events.Add(eventItem);
 
-            // Preserve order by sorting by date, then add new event at the end
-            events.Sort((a, b) => System.DateTime.Parse(a.Date).CompareTo(System.DateTime.Parse(b.Date)));
+            // Preserve order by sorting by start time, then add new event at the end
+            events.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
 
             await _fileLock.Save(events);
         }
@@ -70,8 +70,8 @@ public class EventStore
             events.RemoveAll(e => e.Id == eventItem.Id);
             events.Add(eventItem);
 
-            // Preserve order by sorting by date, then add new event at the end
-            events.Sort((a, b) => System.DateTime.Parse(a.Date).CompareTo(System.DateTime.Parse(b.Date)));
+            // Preserve order by sorting by start time, then add new event at the end
+            events.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
 
             await File.WriteAllTextAsync(
                 _filePath,

@@ -235,7 +235,7 @@ public class JsonStorage<T> : IFileLock<List<T>> where T : class
     /// <summary>
     /// Load all items from the JSON file (implements IFileLock interface).
     /// </summary>
-    public async Task<List<T>> Load()
+    public async Task<List<T>?> Load()
     {
         if (_fileLock != null)
         {
