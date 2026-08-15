@@ -1,0 +1,9 @@
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.csproj.AssemblyReference.cache
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\rpswa.dswa.cache.json
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.AssemblyInfoInputs.cache
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.AssemblyInfo.cs
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.csproj.CoreCompileInputs.cache
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\rhenry74\source\repos\EventCalendar\EventCalendar.API\obj\Debug\net10.0\EventCalendar.API.sourcelink.json

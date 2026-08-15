@@ -1,23 +1,24 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\rhenr\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj": {}
+    "C:\\Users\\rhenry74\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj": {}
   },
   "projects": {
-    "C:\\Users\\rhenr\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj": {
+    "C:\\Users\\rhenry74\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\rhenr\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj",
+        "projectUniqueName": "C:\\Users\\rhenry74\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj",
         "projectName": "EventCalendar.API",
-        "projectPath": "C:\\Users\\rhenr\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj",
-        "packagesPath": "C:\\Users\\rhenr\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\rhenr\\source\\repos\\EventCalendar\\EventCalendar.API\\obj\\",
+        "projectPath": "C:\\Users\\rhenry74\\source\\repos\\EventCalendar\\EventCalendar.API\\EventCalendar.API.csproj",
+        "packagesPath": "C:\\Users\\rhenry74\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\rhenry74\\source\\repos\\EventCalendar\\EventCalendar.API\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages",
+          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
         ],
         "configFilePaths": [
-          "C:\\Users\\rhenr\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\rhenry74\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -46,7 +47,7 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.300"
+        "SdkAnalysisLevel": "10.0.400"
       },
       "frameworks": {
         "net10.0": {
@@ -77,7 +78,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.AspNetCore": "(,10.0.32767]",
             "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",

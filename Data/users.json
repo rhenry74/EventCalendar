@@ -1,0 +1,10 @@
+[
+  {
+    "Id": "1",
+    "GoogleId": "google-oauth2|123456789",
+    "DisplayName": "John Doe",
+    "Email": "john.doe@example.com",
+    "AvatarUrl": "",
+    "CreatedAt": "2026-08-14T15:00:00Z"
+  }
+]

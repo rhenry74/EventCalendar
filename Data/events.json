@@ -1,0 +1,28 @@
+[
+  {
+    "Id": "1",
+    "OwnerId": "1",
+    "Title": "Team Meeting",
+    "Description": "Weekly sync with the team",
+    "Start": "2026-08-15T10:00:00Z",
+    "End": "2026-08-15T11:00:00Z",
+    "IsPublic": true,
+    "Category": "Work",
+    "Recurrence": null,
+    "CreatedAt": "2026-08-14T15:00:00Z",
+    "UpdatedAt": "2026-08-14T15:00:00Z"
+  },
+  {
+    "Id": "2",
+    "OwnerId": "1",
+    "Title": "Private Dinner",
+    "Description": "Family dinner",
+    "Start": "2026-08-20T19:00:00Z",
+    "End": "2026-08-20T21:00:00Z",
+    "IsPublic": false,
+    "Category": "Personal",
+    "Recurrence": null,
+    "CreatedAt": "2026-08-14T15:01:00Z",
+    "UpdatedAt": "2026-08-14T15:01:00Z"
+  }
+]
