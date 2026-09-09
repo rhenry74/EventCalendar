@@ -92,3 +92,6 @@ yarn.lock
 
 # Personal practice file
 practice.text
+
+# Local OAuth client credentials
+client_secret_2.json
