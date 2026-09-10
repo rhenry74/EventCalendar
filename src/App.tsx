@@ -1,12 +1,19 @@
 import './App.css'
-import { Box } from '@mui/material'
+import { Box, Button, Typography } from '@mui/material'
 import Calendar from './components/Calendar'
 import EventDialog from './components/EventDialog'
 import { useState, useEffect } from 'react'
 import type { Event, PartialEvent } from './types'
 import { useTheme } from '@mui/material/styles'
 
-const API_BASE_URL = '/api/events'
+const API_ROOT = import.meta.env.VITE_API_BASE_URL ?? '/api'
+const API_BASE_URL = `${API_ROOT}/events`
+
+interface SignedInUser {
+  id: string
+  name?: string
+  email?: string
+}
 
 function App() {
   const theme = useTheme();
@@ -14,26 +21,35 @@ function App() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [initialEvent, setInitialEvent] = useState<Event | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<SignedInUser | null>(null)
 
   useEffect(() => {
-    fetchEvents().catch(console.error)
+    const load = async () => {
+      try {
+        const response = await fetch(`${API_ROOT}/auth/me`, { credentials: 'include' })
+        if (!response.ok) return
+        const signedInUser = await response.json()
+        setUser(signedInUser)
+        await fetchEvents()
+      } catch (error) {
+        console.error('Failed to check the current session.', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    load()
   }, [])
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch(API_BASE_URL)
+      const response = await fetch(API_BASE_URL, { credentials: 'include' })
       if (!response.ok) {
         throw new Error('Failed to fetch events')
       }
       const data = await response.json()
       setEvents(data)
     } catch (err) {
-      console.error('Failed to load events from API. Using mock data.')
-      setEvents([
-        { id: '1', title: 'Tech Conference 2026', description: 'A huge conference for developers to share knowledge.', date: '2026-08-15T10:00:00', location: 'San Francisco, CA', category: 'Tech' },
-        { id: '2', title: 'Music Festival', description: 'Enjoy live music from various artists.', date: '2026-08-20T14:00:00', location: 'Austin, TX', category: 'Entertainment' },
-        { id: '3', title: 'Art Gallery Opening', description: 'New exhibition by local artists.', date: '2026-08-25T18:00:00', location: 'New York, NY', category: 'Art' }
-      ])
+      console.error('Failed to load events from API.', err)
     } finally {
       setIsLoading(false)
     }
@@ -41,7 +57,7 @@ function App() {
 
   const deleteEvent = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' })
+      const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE', credentials: 'include' })
       if (response.ok) {
         await fetchEvents()
       } else {
@@ -72,6 +88,7 @@ function App() {
         response = await fetch(API_BASE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(event)
         })
         // Read the created event from the 201 response
@@ -82,6 +99,7 @@ function App() {
         response = await fetch(`${API_BASE_URL}/${event.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(event)
         })
         if (response.ok) {
@@ -103,15 +121,38 @@ function App() {
     }
   }
 
+  const logOut = async () => {
+    await fetch(`${API_ROOT}/auth/logout`, { method: 'POST', credentials: 'include' })
+    setEvents([])
+    setUser(null)
+  }
+
+  if (isLoading) return <Box sx={{ p: 4 }}>Loading…</Box>
+
+  if (!user) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', backgroundColor: theme.palette.background.default }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography variant="h3" gutterBottom>EventCalendar</Typography>
+          <Typography sx={{ mb: 3 }}>Sign in to create private events or share public ones.</Typography>
+          <Button variant="contained" href={`${API_ROOT}/auth/login`}>Continue with Google</Button>
+        </Box>
+      </Box>
+    )
+  }
+
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: theme.palette.background.default }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+        <Typography>{user.name ?? user.email}</Typography>
+        <Button onClick={logOut}>Sign out</Button>
+      </Box>
       <Calendar 
         events={events} 
         onOpenDialog={handleOpenDialog}
         onDeleteEvent={deleteEvent}
         theme={theme}
       />
-      {isLoading && <div>Loading...</div>}
       <EventDialog
         open={isDialogOpen}
         onClose={handleCloseDialog}

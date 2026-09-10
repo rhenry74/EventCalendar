@@ -7,7 +7,8 @@ A simple React-based calendar application that displays events across different 
 - **Dynamic Calendar Grid**: Displays a month-by-month view of dates.
 - **Month Navigation**: Easily switch between previous and next months using navigation controls.
 - **Event Display**: Renders event cards on specific dates, showing information such as titles, locations, and categories.
-- **CRUD Operations**: Create, read, update, and delete events via REST API.
+- **Google sign-in**: Events are owned by their creator; owners can make events public.
+- **Access control**: Users can only edit or delete their own events.
 - **Category Filtering**: Events organized by category (Tech, Entertainment, Art, etc.).
 - **Interactive Event Dialog**: Add new events or edit existing ones with a form dialog.
 
@@ -72,8 +73,9 @@ To run the full application with the .NET API backend:
    dotnet run
    ```
 
-   The API will be available at `http://localhost:5000` with endpoints:
-   - `GET /api/events` - List all events
+   The API will be available at `http://localhost:5115` with endpoints:
+   - `GET /api/auth/login` - Start Google sign-in
+   - `GET /api/events` - List public events plus the signed-in user's private events
    - `POST /api/events` - Create new event
    - `PUT /api/events/{id}` - Update existing event
    - `DELETE /api/events/{id}` - Delete event
@@ -84,10 +86,24 @@ To run the full application with the .NET API backend:
    npm run dev
    ```
 
-The application will be available at `http://localhost:5173`. The frontend connects to the API via CORS-enabled endpoints at port 5000.
+The application will be available at `http://localhost:5173`. The frontend connects to the API via CORS-enabled endpoints at port 5115.
+
+### Google sign-in setup
+
+1. In Google Cloud Console, create an OAuth 2.0 **Web application** client.
+2. Add `http://localhost:5115/signin-google` as an authorized redirect URI.
+3. Store the client values outside Git using .NET user secrets:
+
+   ```powershell
+   cd EventCalendar.API
+   dotnet user-secrets set "OAuth:ClientId" "your-client-id"
+   dotnet user-secrets set "OAuth:ClientSecret" "your-client-secret"
+   ```
+
+4. Run the API and frontend, then use **Continue with Google**. For deployment, register the production callback URL and provide these values through the host's secret or environment-variable system (`OAuth__ClientId` and `OAuth__ClientSecret`).
 
 ### Architecture Note
 
 - **Frontend (Port 5173)**: Vite development server serving React app
-- **API Backend (Port 5000)**: .NET minimal API handling event CRUD operations
-- **Shared Data**: Both frontend and API read/write to `public/events.json` for persistence
+- **API Backend (Port 5115)**: .NET minimal API handling Google authentication and event authorization
+- **Data**: `EventCalendar.API/Data/events.json` stores local events and is ignored by Git. Legacy sample events are imported once as public events.

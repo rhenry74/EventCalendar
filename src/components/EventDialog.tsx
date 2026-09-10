@@ -6,7 +6,9 @@ import {
   DialogActions, 
   Button, 
   TextField,
-  Box
+  Box,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -28,6 +30,7 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('General');
   const [date, setDate] = useState<Date | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
 
   useEffect(() => {
     if (initialEvent) {
@@ -36,12 +39,14 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       setLocation(initialEvent.location || '');
       setCategory(initialEvent.category || 'General');
       setDate(new Date(initialEvent.date));
+      setIsPublic(!!initialEvent.isPublic);
     } else {
       setTitle('');
       setDescription('');
       setLocation('');
       setCategory('General');
       setDate(new Date());
+      setIsPublic(false);
     }
   }, [initialEvent]);
 
@@ -52,6 +57,7 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       setLocation('');
       setCategory('General');
       setDate(new Date());
+      setIsPublic(false);
     }
   }, [open]);
 
@@ -68,6 +74,7 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       location: location.trim(),
       category,
       date: date?.toISOString() || new Date().toISOString(),
+      isPublic,
     };
     
     onSave(eventData);
@@ -198,6 +205,10 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
                   }
                 }
               }}
+            />
+            <FormControlLabel
+              control={<Switch checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />}
+              label="Make this event public"
             />
           </Box>
         </DialogContent>

@@ -95,3 +95,10 @@ practice.text
 
 # Local OAuth client credentials
 client_secret_2.json
+
+# Local calendar data includes private user events
+EventCalendar.API/Data/
+
+# Azure deployment output
+.azure-package/
+EventCalendar-azure-deploy.zip

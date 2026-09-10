@@ -1,190 +1,223 @@
+using System.Security.Claims;
 using System.Text.Json;
-using System.IO;
-using System.Collections.Generic;
-
-// Resolve to public/events.json from EventCalendar root directory (parent of EventCalendar.API)
-string projectRoot = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, ".."));
-string eventsFilePath = Path.Combine(projectRoot, "public", "events.json");
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
 
 var builder = WebApplication.CreateBuilder(args);
+var frontendOrigin = builder.Configuration["Frontend:Origin"] ?? "http://localhost:5173";
+var allowedOrigins = new[] { "http://localhost:5173", frontendOrigin }.Distinct().ToArray();
 
-// Add CORS support  
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowVite", policy =>
+builder.Services.AddCors(options => options.AddPolicy("AllowVite", policy => policy
+    .WithOrigins(allowedOrigins)
+    .AllowAnyMethod()
+    .AllowAnyHeader()
+    .AllowCredentials()));
+
+builder.Services
+    .AddAuthentication(options =>
     {
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .WithExposedHeaders("Location");
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+    })
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "eventcalendar.auth";
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+    })
+    .AddGoogle(options =>
+    {
+        options.ClientId = builder.Configuration["OAuth:ClientId"]
+            ?? throw new InvalidOperationException("OAuth:ClientId must be configured for Google login.");
+        options.ClientSecret = builder.Configuration["OAuth:ClientSecret"]
+            ?? throw new InvalidOperationException("OAuth:ClientSecret must be configured for Google login.");
     });
-});
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
-
-// Apply CORS before routing
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseCors("AllowVite");
+app.UseAuthentication();
+app.UseAuthorization();
 
-// Ensure events directory and file exist
-if (!Directory.Exists(Path.GetDirectoryName(eventsFilePath)!))
-{
-    Directory.CreateDirectory(Path.GetDirectoryName(eventsFilePath)!);
-}
+var eventStorePath = builder.Configuration["Storage:EventStorePath"] ?? "Data/events.json";
+if (!Path.IsPathRooted(eventStorePath)) eventStorePath = Path.Combine(builder.Environment.ContentRootPath, eventStorePath);
+var legacyEventsPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "public", "events.json"));
+var store = new EventStore(eventStorePath, legacyEventsPath);
+await store.InitializeAsync();
 
-// Load initial events if file doesn't exist
-if (File.Exists(eventsFilePath) == false)
+app.MapGet("/api/auth/login", () => Results.Challenge(
+    new AuthenticationProperties { RedirectUri = frontendOrigin }, [GoogleDefaults.AuthenticationScheme]));
+
+app.MapPost("/api/auth/logout", async (HttpContext context) =>
 {
-    var defaultEvents = new List<Event>
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.NoContent();
+}).RequireAuthorization();
+
+app.MapGet("/api/auth/me", (ClaimsPrincipal user) => Results.Ok(new
+{
+    id = GetUserId(user),
+    name = user.Identity?.Name,
+    email = user.FindFirstValue(ClaimTypes.Email)
+})).RequireAuthorization();
+
+var events = app.MapGroup("/api/events").RequireAuthorization();
+
+events.MapGet("", async (ClaimsPrincipal user) =>
+{
+    var userId = GetUserId(user);
+    var visibleEvents = await store.GetVisibleEventsAsync(userId);
+    return Results.Ok(visibleEvents.Select(item => ToResponse(item, userId)));
+});
+
+events.MapPost("", async (EventInput input, ClaimsPrincipal user) =>
+{
+    var userId = GetUserId(user);
+    if (string.IsNullOrWhiteSpace(input.Title)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["title"] = ["Title is required."] });
+
+    var eventItem = new CalendarEvent
     {
-        new Event { Id = "1", Title = "Tech Conference 2026", Description = "A huge conference for developers to share knowledge.", Date = "2026-08-15T10:00:00", Location = "San Francisco, CA", Category = "Tech" },
-        new Event { Id = "2", Title = "Music Festival", Description = "Enjoy live music from various artists.", Date = "2026-08-20T14:00:00", Location = "Austin, TX", Category = "Entertainment" },
-        new Event { Id = "3", Title = "Art Gallery Opening", Description = "New exhibition by local artists.", Date = "2026-08-25T18:00:00", Location = "New York, NY", Category = "Art" }
+        Id = Guid.NewGuid().ToString("N"), OwnerId = userId,
+        OwnerName = user.Identity?.Name ?? user.FindFirstValue(ClaimTypes.Email) ?? "Unknown user",
+        Title = input.Title.Trim(), Description = input.Description?.Trim() ?? string.Empty,
+        Date = input.Date, Location = input.Location?.Trim(), Category = input.Category?.Trim(), IsPublic = input.IsPublic
     };
-    await JsonSerializer.SerializeAsync(File.OpenWrite(eventsFilePath), defaultEvents, typeof(List<Event>));
-}
+    await store.AddAsync(eventItem);
+    return Results.Created($"/api/events/{eventItem.Id}", ToResponse(eventItem, userId));
+});
 
-// API endpoint for events - GET all events
-app.MapGet("/api/events", async () =>
+events.MapPut("/{id}", async (string id, EventInput input, ClaimsPrincipal user) =>
 {
-    var store = new EventStore(eventsFilePath);
-    var events = await store.GetAllEvents();
-    return Results.Ok(events);
-})
-.WithName("GetAllEvents")
-.WithOpenApi();
+    var userId = GetUserId(user);
+    var existing = await store.GetByIdAsync(id);
+    if (existing is null) return Results.NotFound();
+    if (existing.OwnerId != userId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(input.Title)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["title"] = ["Title is required."] });
 
-// API endpoint for events - POST create new event
-app.MapPost("/api/events", async (Event eventItem) =>
+    existing.Title = input.Title.Trim();
+    existing.Description = input.Description?.Trim() ?? string.Empty;
+    existing.Date = input.Date; existing.Location = input.Location?.Trim();
+    existing.Category = input.Category?.Trim(); existing.IsPublic = input.IsPublic;
+    await store.UpdateAsync(existing);
+    return Results.Ok(ToResponse(existing, userId));
+});
+
+events.MapDelete("/{id}", async (string id, ClaimsPrincipal user) =>
 {
-    // Generate ID for new events
-    eventItem.Id = Guid.NewGuid().ToString("N").Substring(0, 8);
-    
-    var store = new EventStore(eventsFilePath);
-    var events = await store.GetAllEvents();
-    events.Add(eventItem);
-    
-    await File.WriteAllTextAsync(
-        eventsFilePath, 
-        JsonSerializer.Serialize(events, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
-        }));
-    
-    return Results.Created($"/api/events/{eventItem.Id}", eventItem);
-})
-.WithName("CreateEvent")
-.WithOpenApi();
+    var userId = GetUserId(user);
+    var existing = await store.GetByIdAsync(id);
+    if (existing is null) return Results.NotFound();
+    if (existing.OwnerId != userId) return Results.Forbid();
+    await store.DeleteAsync(id);
+    return Results.NoContent();
+});
 
-// API endpoint for events - PUT update existing event
-app.MapPut("/api/events/{id}", async (string id, Event eventItem) =>
-{
-    var store = new EventStore(eventsFilePath);
-    var events = await store.GetAllEvents();
-    
-    var existingIndex = events.FindIndex(e => e.Id == id);
-    if (existingIndex >= 0)
-    {
-        events[existingIndex] = eventItem;
-        
-        await File.WriteAllTextAsync(
-            eventsFilePath, 
-            JsonSerializer.Serialize(events, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
-            }));
-        
-        return Results.Ok(eventItem);
-    }
-    
-    return Results.NotFound();
-})
-.WithName("UpdateEvent")
-.WithOpenApi();
-
-// API endpoint for events - DELETE existing event
-app.MapDelete("/api/events/{id}", async (string id) =>
-{
-    var store = new EventStore(eventsFilePath);
-    var events = await store.GetAllEvents();
-    
-    var existingIndex = events.FindIndex(e => e.Id == id);
-    if (existingIndex >= 0)
-    {
-        events.RemoveAt(existingIndex);
-        
-        await File.WriteAllTextAsync(
-            eventsFilePath, 
-            JsonSerializer.Serialize(events, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
-            }));
-        
-        return Results.NoContent();
-    }
-    
-    return Results.NotFound();
-})
-.WithName("DeleteEvent")
-.WithOpenApi();
-
-// Health check endpoint
-app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Message = "EventCalendar API is running" }))
-.WithName("HealthCheck");
-
+app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Message = "EventCalendar API is running" }));
+app.MapFallbackToFile("index.html");
 app.Run();
 
-public class Event {
-    public string Id { get; set; } = string.Empty;
+static string GetUserId(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.NameIdentifier)
+    ?? throw new UnauthorizedAccessException("Google did not provide a user identifier.");
+
+static EventResponse ToResponse(CalendarEvent item, string userId) => new(item.Id, item.Title, item.Description ?? string.Empty,
+    item.Date, item.Location, item.Category, item.IsPublic, item.OwnerName, item.OwnerId == userId);
+
+public class EventInput
+{
     public string Title { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
     public string Date { get; set; } = string.Empty;
     public string? Location { get; set; }
     public string? Category { get; set; }
+    public bool IsPublic { get; set; }
 }
 
-public class EventStore {
-    private readonly string _filePath;
-    
-    public EventStore(string filePath)
+public sealed class CalendarEvent : EventInput
+{
+    public string Id { get; set; } = string.Empty;
+    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+}
+
+public sealed record EventResponse(string Id, string Title, string Description, string Date,
+    string? Location, string? Category, bool IsPublic, string OwnerName, bool IsOwner);
+
+public sealed class EventStore(string filePath, string legacyEventsPath)
+{
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    public async Task InitializeAsync()
     {
-        _filePath = filePath;
-    }
-    
-    public List<Event> GetEvents()
-    {
-        try
+        if (File.Exists(filePath)) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        var legacyEvents = File.Exists(legacyEventsPath)
+            ? await JsonSerializer.DeserializeAsync<List<EventInput>>(File.OpenRead(legacyEventsPath), _jsonOptions) ?? []
+            : [];
+        var migrated = legacyEvents.Select(item => new CalendarEvent
         {
-            return JsonSerializer.Deserialize<List<Event>>(File.ReadAllText(_filePath), new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
-            }) ?? new List<Event>();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading events: {ex.Message}");
-            return new List<Event>();
-        }
+            Id = Guid.NewGuid().ToString("N"), OwnerId = "system", OwnerName = "EventCalendar",
+            Title = item.Title, Description = item.Description, Date = item.Date,
+            Location = item.Location, Category = item.Category, IsPublic = true
+        }).ToList();
+        await WriteAsync(migrated);
     }
 
-    public async Task SaveEvent(Event eventItem)
+    public async Task<List<CalendarEvent>> GetVisibleEventsAsync(string userId) =>
+        (await ReadAsync()).Where(item => item.IsPublic || item.OwnerId == userId).OrderBy(item => item.Date).ToList();
+
+    public async Task<CalendarEvent?> GetByIdAsync(string id) => (await ReadAsync()).FirstOrDefault(item => item.Id == id);
+
+    public async Task AddAsync(CalendarEvent item)
     {
-        var events = GetEvents();
-        events.RemoveAll(e => e.Id == eventItem.Id);
-        events.Add(eventItem);
-        
-        // Preserve order by sorting by date, then add new event at the end
-        events.Sort((a, b) => DateTime.Parse(a.Date).CompareTo(DateTime.Parse(b.Date)));
-        
-        await File.WriteAllTextAsync(_filePath, JsonSerializer.Serialize(events, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
-        }));
+        await Gate.WaitAsync();
+        try { var all = await ReadUnsafeAsync(); all.Add(item); await WriteUnsafeAsync(all); }
+        finally { Gate.Release(); }
     }
 
-    public async Task<List<Event>> GetAllEvents() => GetEvents();
+    public async Task UpdateAsync(CalendarEvent item)
+    {
+        await Gate.WaitAsync();
+        try { var all = await ReadUnsafeAsync(); var index = all.FindIndex(x => x.Id == item.Id); if (index >= 0) { all[index] = item; await WriteUnsafeAsync(all); } }
+        finally { Gate.Release(); }
+    }
+
+    public async Task DeleteAsync(string id)
+    {
+        await Gate.WaitAsync();
+        try { var all = await ReadUnsafeAsync(); all.RemoveAll(item => item.Id == id); await WriteUnsafeAsync(all); }
+        finally { Gate.Release(); }
+    }
+
+    private async Task<List<CalendarEvent>> ReadAsync()
+    {
+        await Gate.WaitAsync();
+        try { return await ReadUnsafeAsync(); }
+        finally { Gate.Release(); }
+    }
+
+    private async Task<List<CalendarEvent>> ReadUnsafeAsync()
+    {
+        await using var stream = File.OpenRead(filePath);
+        return await JsonSerializer.DeserializeAsync<List<CalendarEvent>>(stream, _jsonOptions) ?? [];
+    }
+
+    private async Task WriteAsync(List<CalendarEvent> events)
+    {
+        await Gate.WaitAsync();
+        try { await WriteUnsafeAsync(events); }
+        finally { Gate.Release(); }
+    }
+
+    private async Task WriteUnsafeAsync(List<CalendarEvent> events)
+    {
+        await using var stream = File.Create(filePath);
+        await JsonSerializer.SerializeAsync(stream, events, _jsonOptions);
+    }
 }

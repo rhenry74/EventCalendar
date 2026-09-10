@@ -38,8 +38,9 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, theme })
           }
         }}
       >
-        {/* Edit button - Row 1, Column 1 */}
+        {/* Only an event owner can edit or delete it. */}
         <Box sx={{ gridColumn: '1 / 2', textAlign: 'left'}}>
+          {event.isOwner &&
           <IconButton 
             size="small" 
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
@@ -47,6 +48,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, theme })
           >
             <EventIcon fontSize="small" />
           </IconButton>
+          }
         </Box>
 
         {/* Title - Row 1, Column 2 */}
@@ -56,6 +58,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, theme })
 
         {/* Delete button - Row 1, Column 3 */}
         <Box sx={{ gridColumn: '3 / -1', textAlign: 'right'}}>
+          {event.isOwner &&
           <IconButton 
             size="small" 
             onClick={(e) => { e.stopPropagation(); onDelete(event.id); }}
@@ -63,6 +66,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, theme })
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
+          }
         </Box>
 
         {/* Category - Spans all 3 columns */}
@@ -81,6 +85,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, theme })
           }}
         >
           {event.category}
+          {event.isPublic ? ' · Public' : ' · Private'}
         </Box>
 
         {/* Description - Spans all 3 columns */}

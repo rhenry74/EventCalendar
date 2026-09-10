@@ -5,6 +5,9 @@ export interface Event {
   date: string;
   location?: string;
   category?: string;
+  isPublic?: boolean;
+  ownerName?: string;
+  isOwner?: boolean;
 }
 
 export interface PartialEvent {
@@ -14,6 +17,7 @@ export interface PartialEvent {
   date: string;
   location?: string;
   category?: string;
+  isPublic: boolean;
 }
 
 export interface CalendarDate {
