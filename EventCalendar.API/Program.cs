@@ -86,7 +86,9 @@ events.MapPost("", async (EventInput input, ClaimsPrincipal user) =>
         Id = Guid.NewGuid().ToString("N"), OwnerId = userId,
         OwnerName = user.Identity?.Name ?? user.FindFirstValue(ClaimTypes.Email) ?? "Unknown user",
         Title = input.Title.Trim(), Description = input.Description?.Trim() ?? string.Empty,
-        Date = input.Date, Location = input.Location?.Trim(), Category = input.Category?.Trim(), IsPublic = input.IsPublic
+        Journal = input.Journal ?? string.Empty,
+        Date = input.Date, Location = input.Location?.Trim(), Category = input.Category?.Trim(),
+        IsPublic = input.IsPublic, EndDate = input.EndDate
     };
     await store.AddAsync(eventItem);
     return Results.Created($"/api/events/{eventItem.Id}", ToResponse(eventItem, userId));
@@ -102,8 +104,10 @@ events.MapPut("/{id}", async (string id, EventInput input, ClaimsPrincipal user)
 
     existing.Title = input.Title.Trim();
     existing.Description = input.Description?.Trim() ?? string.Empty;
+    existing.Journal = input.Journal ?? string.Empty;
     existing.Date = input.Date; existing.Location = input.Location?.Trim();
     existing.Category = input.Category?.Trim(); existing.IsPublic = input.IsPublic;
+    existing.EndDate = input.EndDate;
     await store.UpdateAsync(existing);
     return Results.Ok(ToResponse(existing, userId));
 });
@@ -126,13 +130,16 @@ static string GetUserId(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.
     ?? throw new UnauthorizedAccessException("Google did not provide a user identifier.");
 
 static EventResponse ToResponse(CalendarEvent item, string userId) => new(item.Id, item.Title, item.Description ?? string.Empty,
-    item.Date, item.Location, item.Category, item.IsPublic, item.OwnerName, item.OwnerId == userId);
+    item.Date, item.Location, item.Category, item.IsPublic, item.OwnerName, item.OwnerId == userId,
+    item.OwnerId == userId ? item.Journal ?? string.Empty : string.Empty, item.EndDate);
 
 public class EventInput
 {
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public string? Journal { get; set; }
     public string Date { get; set; } = string.Empty;
+    public string? EndDate { get; set; }
     public string? Location { get; set; }
     public string? Category { get; set; }
     public bool IsPublic { get; set; }
@@ -146,7 +153,7 @@ public sealed class CalendarEvent : EventInput
 }
 
 public sealed record EventResponse(string Id, string Title, string Description, string Date,
-    string? Location, string? Category, bool IsPublic, string OwnerName, bool IsOwner);
+    string? Location, string? Category, bool IsPublic, string OwnerName, bool IsOwner, string Journal, string? EndDate);
 
 public sealed class EventStore(string filePath, string legacyEventsPath)
 {

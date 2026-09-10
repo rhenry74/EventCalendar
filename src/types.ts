@@ -2,7 +2,9 @@ export interface Event {
   id: string;
   title: string;
   description: string;
+  journal?: string;
   date: string;
+  endDate?: string;
   location?: string;
   category?: string;
   isPublic?: boolean;
@@ -14,7 +16,9 @@ export interface PartialEvent {
   id?: string;
   title: string;
   description: string;
+  journal?: string;
   date: string;
+  endDate?: string;
   location?: string;
   category?: string;
   isPublic: boolean;

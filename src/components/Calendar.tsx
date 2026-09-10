@@ -5,6 +5,34 @@ import { Box, Button, Typography } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import type { Theme } from '@mui/material/styles';
 
+const calendarDateKey = (date: Date) => new Date(Date.UTC(
+  date.getFullYear(), date.getMonth(), date.getDate()
+)).toISOString().split('T')[0];
+
+const eventDateKey = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().split('T')[0];
+};
+
+const eventOccursOnDay = (event: Event, date: Date) => {
+  const dayKey = calendarDateKey(date);
+  const startKey = eventDateKey(event.date);
+  const endKey = event.endDate ? eventDateKey(event.endDate) : startKey;
+  return !!startKey && !!endKey && dayKey >= startKey && dayKey <= endKey;
+};
+
+type EventDayStatus = 'single' | 'start' | 'continued' | 'last';
+
+const eventDayStatus = (event: Event, date: Date): EventDayStatus => {
+  const startKey = eventDateKey(event.date);
+  const endKey = event.endDate ? eventDateKey(event.endDate) : startKey;
+  const dayKey = calendarDateKey(date);
+  if (!startKey || !endKey || startKey === endKey) return 'single';
+  if (dayKey === startKey) return 'start';
+  if (dayKey === endKey) return 'last';
+  return 'continued';
+};
+
 interface CalendarProps {
   events: Event[];
   onOpenDialog: (event?: Event) => void;
@@ -49,35 +77,17 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
   const getEventsForDay = (dayNum: number, isPrevMonth = false, isNextMonth = false): Event[] => {
     if (isPrevMonth) {
       const date = new Date(year, month - 1, dayNum);
-      const currentDayISO = date.toISOString().split('T')[0];
-      return events.filter(e => {
-        const eventDateObj = new Date(e.date);
-        if (isNaN(eventDateObj.getTime())) return false;
-        const eventDayISO = eventDateObj.toISOString().split('T')[0];
-        return eventDayISO === currentDayISO;
-      });
+      return events.filter(e => eventOccursOnDay(e, date));
     }
     
     if (isNextMonth) {
       const date = new Date(year, month + 1, dayNum);
-      const currentDayISO = date.toISOString().split('T')[0];
-      return events.filter(e => {
-        const eventDateObj = new Date(e.date);
-        if (isNaN(eventDateObj.getTime())) return false;
-        const eventDayISO = eventDateObj.toISOString().split('T')[0];
-        return eventDayISO === currentDayISO;
-      });
+      return events.filter(e => eventOccursOnDay(e, date));
     }
 
     // Current month days
     const date = new Date(year, month, dayNum);
-    const currentDayISO = date.toISOString().split('T')[0];
-    return events.filter(e => {
-      const eventDateObj = new Date(e.date);
-      if (isNaN(eventDateObj.getTime())) return false;
-      const eventDayISO = eventDateObj.toISOString().split('T')[0];
-      return eventDayISO === currentDayISO;
-    });
+    return events.filter(e => eventOccursOnDay(e, date));
   };
 
   const calendarDays = useMemo(() => {
@@ -87,16 +97,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
       const date = new Date(year, month, d);
       
       // Filter events for the current day
-      const currentDayISO = date.toISOString().split('T')[0];
-      const dayEvents = events.filter(e => {
-        const eventDateObj = new Date(e.date);
-        if (isNaN(eventDateObj.getTime())) {
-          return false;
-        }
-        
-        const eventDayISO = eventDateObj.toISOString().split('T')[0];
-        return eventDayISO === currentDayISO;
-      });
+      const dayEvents = events.filter(e => eventOccursOnDay(e, date));
       
       days.push({
         day: d,
@@ -119,20 +120,20 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
         display: 'flex', 
         flexDirection: 'column', 
         gap: 2,
-        p: 2,
+        p: { xs: 1, sm: 2 },
         backgroundColor: theme.palette.background.default,
         borderRadius: 2,
         border: `1px solid ${theme.palette.divider}`,
         minHeight: '600px'
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
         <Button 
           onClick={handlePrevMonth}
           startIcon={<ChevronLeft />}
           sx={{ color: theme.palette.text.primary, '&:hover': { backgroundColor: theme.palette.action.hover, color: theme.palette.primary.main } }}
         >Prev</Button>
-        <Typography variant="h4" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>{monthName} {year}</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 600, color: theme.palette.text.primary, textAlign: 'center', flexGrow: 1, order: { xs: -1, sm: 0 }, width: { xs: '100%', sm: 'auto' }, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>{monthName} {year}</Typography>
         <Button 
           onClick={handleNextMonth}
           endIcon={<ChevronRight />}
@@ -152,8 +153,17 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
       
       <Box 
         sx={{ 
+          width: '100%',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          pb: 1,
+        }}
+      >
+      <Box
+        sx={{
           display: 'grid', 
-          gridTemplateColumns: `repeat(7, minmax(auto, 200px))`, 
+          gridTemplateColumns: 'repeat(7, minmax(96px, 1fr))',
+          minWidth: { xs: 672, sm: 0 },
           gap: theme.spacing(1),
           flex: 1
         }}
@@ -192,6 +202,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
                 <EventCard 
                   key={event.id} 
                   event={event} 
+                  dayStatus={eventDayStatus(event, new Date(year, month - 1, day))}
                   onDelete={async () => {
                     try {
                       await onDeleteEvent(event.id);
@@ -223,6 +234,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
                 <EventCard 
                   key={event.id} 
                   event={event} 
+                  dayStatus={eventDayStatus(event, dayData.date)}
                   onDelete={async () => {
                     try {
                       await onDeleteEvent(event.id);
@@ -255,6 +267,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
                 <EventCard 
                   key={event.id} 
                   event={event} 
+                  dayStatus={eventDayStatus(event, new Date(year, month + 1, day))}
                   onDelete={async () => {
                     try {
                       await onDeleteEvent(event.id);
@@ -268,6 +281,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
             </Box>
           </Box>
         ))}
+      </Box>
       </Box>
     </Box>
   );

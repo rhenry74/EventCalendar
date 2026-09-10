@@ -143,8 +143,8 @@ function App() {
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: theme.palette.background.default }}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
-        <Typography>{user.name ?? user.email}</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 1, px: { xs: 1, sm: 2 }, pt: 2 }}>
+        <Typography sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name ?? user.email}</Typography>
         <Button onClick={logOut}>Sign out</Button>
       </Box>
       <Calendar 
