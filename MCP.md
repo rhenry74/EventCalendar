@@ -3,6 +3,7 @@
 The API exposes a remote, streamable HTTP MCP server at `/mcp` with these
 tools:
 
+- `list_categories`
 - `search_events`
 - `get_event`
 - `create_event`
@@ -30,6 +31,13 @@ The resolved Google subject controls all permissions:
 - created events are owned by that user;
 - updates and deletes are limited to that user's events;
 - unknown or restarted-process tokens return `401 Unauthorized`.
+
+Call `list_categories` before creating or updating events. Use the returned
+category `name` exactly; `search_events` accepts the same name as its optional
+`category` filter.
+
+For `update_event`, title and date are required. Omit optional fields to keep
+their current values.
 
 The MCP endpoint is:
 

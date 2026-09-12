@@ -1,18 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import type { CalendarDate, Event } from '../types';
+import type { CalendarDate, Category, Event } from '../types';
 import EventCard from './EventCard';
 import { Box, Button, Typography } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import type { Theme } from '@mui/material/styles';
+import { dateOnlyPart } from '../dateUtils';
 
 const calendarDateKey = (date: Date) => new Date(Date.UTC(
   date.getFullYear(), date.getMonth(), date.getDate()
 )).toISOString().split('T')[0];
 
 const eventDateKey = (value: string) => {
-  // Date-only values represent a local calendar date. Avoid new Date('YYYY-MM-DD')
-  // here because JavaScript interprets that form as UTC midnight.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  // Date-only values, including UTC-midnight values from MCP clients, represent
+  // a local calendar date rather than an instant in time.
+  const dateOnly = dateOnlyPart(value);
+  if (dateOnly) return dateOnly;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   // Timed values are stored as instants (usually ISO UTC), but calendar
@@ -42,13 +44,17 @@ const eventDayStatus = (event: Event, date: Date): EventDayStatus => {
 
 interface CalendarProps {
   events: Event[];
+  categories: Category[];
   onOpenDialog: (event?: Event) => void;
   onDeleteEvent: (id: string, callback?: () => void) => Promise<void>;
   theme: Theme;
 }
 
-const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent, theme }) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 7)); // August 2026
+const Calendar: React.FC<CalendarProps> = ({ events, categories, onOpenDialog, onDeleteEvent, theme }) => {
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -209,6 +215,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
                 <EventCard 
                   key={event.id} 
                   event={event} 
+                  categories={categories}
                   dayStatus={eventDayStatus(event, new Date(year, month - 1, day))}
                   onDelete={async () => {
                     try {
@@ -241,6 +248,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
                 <EventCard 
                   key={event.id} 
                   event={event} 
+                  categories={categories}
                   dayStatus={eventDayStatus(event, dayData.date)}
                   onDelete={async () => {
                     try {
@@ -274,6 +282,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, onOpenDialog, onDeleteEvent
                 <EventCard 
                   key={event.id} 
                   event={event} 
+                  categories={categories}
                   dayStatus={eventDayStatus(event, new Date(year, month + 1, day))}
                   onDelete={async () => {
                     try {

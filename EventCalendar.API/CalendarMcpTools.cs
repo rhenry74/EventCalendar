@@ -7,6 +7,12 @@ using ModelContextProtocol.Server;
 [McpServerToolType]
 public sealed class CalendarMcpTools
 {
+    [McpServerTool(Name = "list_categories", Title = "List event categories", ReadOnly = true, Destructive = false)]
+    [Description("List the exact event category names available to the calendar, including their display metadata. Use a returned name exactly when creating or updating an event, and use these names for category filters when searching.")]
+    public static Task<IReadOnlyList<EventCategory>> ListCategories(
+        CategoryStore categoryStore,
+        CancellationToken cancellationToken) => categoryStore.GetAllAsync(cancellationToken);
+
     [McpServerTool(Name = "search_events", Title = "Search calendar events", ReadOnly = true, Destructive = false)]
     [Description("Search the authenticated user's events. Public events from other users are included, but private events and journal text are only visible to their owner.")]
     public static async Task<IReadOnlyList<McpEventResult>> SearchEvents(
@@ -14,6 +20,7 @@ public sealed class CalendarMcpTools
         IHttpContextAccessor httpContextAccessor,
         CancellationToken cancellationToken,
         [Description("Optional words to find in the title, description, location, category, or journal.")] string? query = null,
+        [Description("Optional exact category name from list_categories.")] string? category = null,
         [Description("Optional inclusive start date or ISO timestamp (YYYY-MM-DD).") ] string? from = null,
         [Description("Optional inclusive end date or ISO timestamp (YYYY-MM-DD).") ] string? to = null,
         [Description("Maximum number of results, from 1 to 100.")] int limit = 50)
@@ -28,7 +35,7 @@ public sealed class CalendarMcpTools
 
         var visible = await store.GetVisibleEventsAsync(user.Id);
         var results = visible
-            .Where(item => Matches(item, query, fromDate, toDate))
+            .Where(item => Matches(item, query, category, fromDate, toDate))
             .Take(limit)
             .Select(item => ToResult(item, user.Id))
             .ToList();
@@ -67,11 +74,11 @@ public sealed class CalendarMcpTools
             Title = input.Title.Trim(),
             Description = input.Description?.Trim() ?? string.Empty,
             Journal = input.Journal ?? string.Empty,
-            Date = input.Date.Trim(),
-            EndDate = NormalizeOptional(input.EndDate),
+            Date = NormalizeCalendarValue(input.Date),
+            EndDate = NormalizeOptionalCalendarValue(input.EndDate),
             Location = input.Location?.Trim(),
             Category = input.Category?.Trim(),
-            IsPublic = input.IsPublic
+            IsPublic = input.IsPublic ?? false
         };
         ValidateRange(item.Date, item.EndDate);
         await store.AddAsync(item);
@@ -79,7 +86,7 @@ public sealed class CalendarMcpTools
     }
 
     [McpServerTool(Name = "update_event", Title = "Update a calendar event", ReadOnly = false, Destructive = true, Idempotent = true)]
-    [Description("Update an event owned by the authenticated user. This replaces the event fields supplied in the request.")]
+    [Description("Update an event owned by the authenticated user. Title and date are required; omitted optional fields keep their existing values.")]
     public static async Task<McpEventResult> UpdateEvent(
         [Description("The event ID to update.")] string id,
         McpEventInput input,
@@ -94,13 +101,13 @@ public sealed class CalendarMcpTools
         ValidateInput(input);
 
         item.Title = input.Title.Trim();
-        item.Description = input.Description?.Trim() ?? string.Empty;
-        item.Journal = input.Journal ?? string.Empty;
-        item.Date = input.Date.Trim();
-        item.EndDate = NormalizeOptional(input.EndDate);
-        item.Location = input.Location?.Trim();
-        item.Category = input.Category?.Trim();
-        item.IsPublic = input.IsPublic;
+        item.Description = input.Description is null ? item.Description : input.Description.Trim();
+        item.Journal = input.Journal is null ? item.Journal : input.Journal.Trim();
+        item.Date = NormalizeCalendarValue(input.Date);
+        if (input.EndDate is not null) item.EndDate = NormalizeOptionalCalendarValue(input.EndDate);
+        if (input.Location is not null) item.Location = input.Location.Trim();
+        if (input.Category is not null) item.Category = input.Category.Trim();
+        if (input.IsPublic.HasValue) item.IsPublic = input.IsPublic.Value;
         ValidateRange(item.Date, item.EndDate);
         await store.UpdateAsync(item);
         return ToResult(item, user.Id);
@@ -130,13 +137,16 @@ public sealed class CalendarMcpTools
         return new McpUser(id, principal?.Identity?.Name ?? principal?.FindFirstValue(ClaimTypes.Email) ?? "MCP user");
     }
 
-    private static bool Matches(CalendarEvent item, string? query, DateTimeOffset? from, DateTimeOffset? to)
+    private static bool Matches(CalendarEvent item, string? query, string? category, DateTimeOffset? from, DateTimeOffset? to)
     {
         if (!string.IsNullOrWhiteSpace(query))
         {
             var haystack = string.Join(" ", item.Title, item.Description, item.Location, item.Category, item.Journal);
             if (!haystack.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase)) return false;
         }
+
+        if (!string.IsNullOrWhiteSpace(category)
+            && !string.Equals(item.Category, category.Trim(), StringComparison.OrdinalIgnoreCase)) return false;
 
         var start = ParseDate(item.Date);
         var end = ParseDate(item.EndDate) ?? start;
@@ -162,7 +172,22 @@ public sealed class CalendarMcpTools
         if (endDate is not null && ParseDate(endDate) < ParseDate(date)) throw new McpException("EndDate cannot be before Date.");
     }
 
-    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NormalizeOptionalCalendarValue(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : NormalizeCalendarValue(value);
+
+    private static string NormalizeCalendarValue(string value)
+    {
+        var trimmed = value.Trim();
+        if (DateTimeOffset.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+            && parsed.Offset == TimeSpan.Zero
+            && parsed.TimeOfDay == TimeSpan.Zero
+            && trimmed.Contains('T', StringComparison.OrdinalIgnoreCase))
+        {
+            return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        return trimmed;
+    }
 
     private static DateTimeOffset? ParseDate(string? value)
     {
@@ -195,11 +220,11 @@ public sealed class McpEventInput
     [Description("Optional location.")]
     public string? Location { get; set; }
 
-    [Description("Optional category name from categories.json.")]
+    [Description("Category name. Use list_categories tool to discover supported categories.")]
     public string? Category { get; set; }
 
-    [Description("Whether other authenticated users can see this event.")]
-    public bool IsPublic { get; set; }
+    [Description("Optional: whether other authenticated users can see this event. Omit when updating to keep the current value.")]
+    public bool? IsPublic { get; set; }
 }
 
 public sealed record McpEventResult(

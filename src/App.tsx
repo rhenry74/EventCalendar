@@ -2,8 +2,9 @@ import './App.css'
 import { Alert, Box, Button, Chip, Snackbar, Typography } from '@mui/material'
 import Calendar from './components/Calendar'
 import EventDialog from './components/EventDialog'
-import { useState, useEffect } from 'react'
-import type { Event, PartialEvent } from './types'
+import { useState, useEffect, useRef } from 'react'
+import type { ChangeEvent } from 'react'
+import type { Category, Event, PartialEvent } from './types'
 import { useTheme } from '@mui/material/styles'
 
 const API_ROOT = import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -18,12 +19,14 @@ interface SignedInUser {
 function App() {
   const theme = useTheme();
   const [events, setEvents] = useState<Event[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [initialEvent, setInitialEvent] = useState<Event | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<SignedInUser | null>(null)
   const [isMcpTokenLoading, setIsMcpTokenLoading] = useState(false)
   const [mcpToast, setMcpToast] = useState<{ severity: 'success' | 'error'; message: string } | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -32,7 +35,7 @@ function App() {
         if (!response.ok) return
         const signedInUser = await response.json()
         setUser(signedInUser)
-        await fetchEvents()
+        await Promise.all([fetchEvents(), fetchCategories()])
       } catch (error) {
         console.error('Failed to check the current session.', error)
       } finally {
@@ -129,6 +132,17 @@ function App() {
     setUser(null)
   }
 
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/categories.json', { cache: 'no-store' })
+      if (!response.ok) throw new Error('Failed to fetch categories')
+      const data = await response.json() as Category[]
+      setCategories(data)
+    } catch (err) {
+      console.error('Failed to load categories.', err)
+    }
+  }
+
   const copyMcpToken = async () => {
     setIsMcpTokenLoading(true)
     try {
@@ -147,6 +161,48 @@ function App() {
       setMcpToast({ severity: 'error', message: 'Could not copy MCP token' })
     } finally {
       setIsMcpTokenLoading(false)
+    }
+  }
+
+  const downloadBackup = async () => {
+    try {
+      const response = await fetch(`${API_ROOT}/events/backup`, { credentials: 'include' })
+      if (!response.ok) throw new Error('Unable to download the event backup.')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'events.json'
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download the event backup.', error)
+      setMcpToast({ severity: 'error', message: 'Could not download events.json' })
+    }
+  }
+
+  const uploadBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!window.confirm('Upload this events.json and replace all calendar data?')) return
+
+    try {
+      const content = JSON.parse(await file.text())
+      if (!Array.isArray(content)) throw new Error('The selected file must contain a JSON array.')
+      const response = await fetch(`${API_ROOT}/events/backup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(content),
+      })
+      if (!response.ok) throw new Error('The API rejected the event backup.')
+      await fetchEvents()
+      setMcpToast({ severity: 'success', message: 'events.json uploaded' })
+    } catch (error) {
+      console.error('Failed to upload the event backup.', error)
+      setMcpToast({ severity: 'error', message: 'Could not upload events.json' })
     }
   }
 
@@ -178,10 +234,24 @@ function App() {
           onClick={copyMcpToken}
           title="Copy a new MCP token for this account"
         />
+        {user.email === 'rhenry74@gmail.com' && (
+          <>
+            <Chip label="BACKUP" size="small" color="secondary" variant="outlined" clickable onClick={downloadBackup} />
+            <Chip label="UPLOAD" size="small" color="secondary" variant="outlined" clickable onClick={() => uploadInputRef.current?.click()} />
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              onChange={uploadBackup}
+            />
+          </>
+        )}
         <Button onClick={logOut}>Sign out</Button>
       </Box>
       <Calendar 
         events={events} 
+        categories={categories}
         onOpenDialog={handleOpenDialog}
         onDeleteEvent={deleteEvent}
         theme={theme}
@@ -191,6 +261,7 @@ function App() {
         onClose={handleCloseDialog}
         onSave={handleSaveEvent}
         initialEvent={initialEvent}
+        categories={categories}
         theme={theme}
       />
       <Snackbar

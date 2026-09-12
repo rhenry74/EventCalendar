@@ -1,14 +1,13 @@
 import React from 'react';
-import type { Event } from '../types';
+import type { Category, Event } from '../types';
 import { IconButton, Box, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EventIcon from '@mui/icons-material/Event';
+import FenceIcon from '@mui/icons-material/Fence';
+import PublicIcon from '@mui/icons-material/Public';
 import type { Theme } from '@mui/material/styles';
-import categoriesData from '../../categories.json';
-
-const categories = categoriesData as Array<{ name: string; icon: string; primaryColor: string; secondaryColor: string }>;
-
-const hasTime = (value: string) => /[T ]\d{2}:\d{2}/.test(value);
+import { isTimedEventValue } from '../dateUtils';
+const hasTime = isTimedEventValue;
 const timeLabel = (value: string) => new Date(value).toLocaleTimeString(undefined, {
   hour: 'numeric', minute: '2-digit'
 });
@@ -28,14 +27,16 @@ const formatEventTiming = (event: Event, status: EventDayStatus) => {
 
 interface EventCardProps {
   event: Event;
+  categories: Category[];
   onDelete: (id: string) => void;
   onEdit: () => void;
   dayStatus?: EventDayStatus;
   theme?: Theme;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, dayStatus = 'single', theme }) => {
+const EventCard: React.FC<EventCardProps> = ({ event, categories, onDelete, onEdit, dayStatus = 'single', theme }) => {
   const category = categories.find(item => item.name === event.category);
+  const location = event.location?.trim();
   const primaryColor = category?.primaryColor || theme?.palette.primary.main || '#60a5fa';
   const secondaryColor = category?.secondaryColor || theme?.palette.primary.light || '#9ca3af';
   const categoryIcon = category?.icon || '📌';
@@ -111,7 +112,12 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, dayStatu
           }}
         >
           <span aria-hidden="true">{categoryIcon}</span> {event.category || 'General'}
-          {event.isPublic ? ' · Public' : ' · Private'}
+          {' · '}
+          {event.isPublic ? (
+            <PublicIcon fontSize="inherit" titleAccess="Public" aria-label="Public" />
+          ) : (
+            <FenceIcon fontSize="inherit" titleAccess="Private" aria-label="Private" />
+          )}
         </Box>
 
         {/* Description - Spans all 3 columns */}
@@ -120,9 +126,11 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onEdit, dayStatu
         </Box>
 
         {/* Location - Spans all 3 columns */}
-        <Box sx={{ gridColumn: 'span 3', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', fontSize: { xs: '0.7rem', sm: '0.6rem' }, color: secondaryColor, cursor: 'default' }}>
-          {event.location || 'TBD'}
-        </Box>
+        {location && (
+          <Box sx={{ gridColumn: 'span 3', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', fontSize: { xs: '0.7rem', sm: '0.6rem' }, color: secondaryColor, cursor: 'default' }}>
+            {location}
+          </Box>
+        )}
 
         {/* Date - Spans all 3 columns */}
         <Box sx={{ gridColumn: 'span 3', textAlign: 'center', fontSize: { xs: '0.7rem', sm: '0.6rem' }, color: secondaryColor, cursor: 'default' }}>

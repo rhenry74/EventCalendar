@@ -12,6 +12,14 @@ export interface Event {
   isOwner?: boolean;
 }
 
+export interface Category {
+  name: string;
+  icon: string;
+  type: string;
+  primaryColor: string;
+  secondaryColor: string;
+}
+
 export interface PartialEvent {
   id?: string;
   title: string;

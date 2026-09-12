@@ -21,31 +21,23 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { format } from 'date-fns';
-import type { Event, PartialEvent } from '../types';
+import type { Category, Event, PartialEvent } from '../types';
 import type { Theme } from '@mui/material/styles';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import categoriesData from '../../categories.json';
-
-const categories = categoriesData as Array<{ name: string; icon: string; type: string; primaryColor: string; secondaryColor: string }>;
-
-// Date-only event values are calendar dates, not UTC instants. Construct them
-// in local time so opening and saving an event does not shift it across a day.
-const parseEventDate = (value: string) => {
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
-  return new Date(value);
-};
+import { isTimedEventValue, parseEventDate } from '../dateUtils';
 
 interface EventDialogProps {
   open: boolean;
   onClose: () => void;
   initialEvent?: Event;
+  categories: Category[];
   onSave: (event: PartialEvent) => void;
   theme: Theme;
 }
 
-const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, onSave, theme }) => {
+const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, categories, onSave, theme }) => {
+  const defaultCategory = categories[0]?.name ?? 'General';
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -66,12 +58,12 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       setTitle(initialEvent.title);
       setDescription(initialEvent.description || '');
       setLocation(initialEvent.location || '');
-      setCategory(initialEvent.category || 'General');
+      setCategory(initialEvent.category || defaultCategory);
       setDate(parseEventDate(initialEvent.date));
-      setHasTime(/[T ]\d{2}:\d{2}:[0-9]/.test(initialEvent.date) && !/[T ]00:00:00(?:\.000)?(?:Z)?$/.test(initialEvent.date));
+      setHasTime(isTimedEventValue(initialEvent.date));
       setEndDate(initialEvent.endDate ? parseEventDate(initialEvent.endDate) : null);
       setHasEndDate(!!initialEvent.endDate);
-      setHasEndTime(!!initialEvent.endDate && /[T ]\d{2}:\d{2}:[0-9]/.test(initialEvent.endDate));
+      setHasEndTime(!!initialEvent.endDate && isTimedEventValue(initialEvent.endDate));
       setIsPublic(!!initialEvent.isPublic);
       setJournal(initialEvent.journal || '');
       setJournalTab(0);
@@ -79,7 +71,7 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       setTitle('');
       setDescription('');
       setLocation('');
-      setCategory('General');
+      setCategory(defaultCategory);
       setDate(new Date());
       setHasTime(false);
       setEndDate(null);
@@ -89,14 +81,14 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       setJournal('');
       setJournalTab(0);
     }
-  }, [initialEvent]);
+  }, [initialEvent, categories]);
 
   useEffect(() => {
     if (!open && !initialEvent) {
       setTitle('');
       setDescription('');
       setLocation('');
-      setCategory('General');
+      setCategory(defaultCategory);
       setDate(new Date());
       setHasTime(false);
       setEndDate(null);

@@ -31,7 +31,8 @@ EventCalendar/
 ├── EventCalendar.API/    # .NET backend API
 │   ├── Program.cs        # API routes and CORS configuration
 │   └── appsettings.json  # API configuration
-├── public/events.json    # Events data file (shared with API)
+├── public/events.json    # Legacy seed events file
+├── public/categories.json # Runtime category definitions
 └── README.md             # This file
 ```
 
@@ -79,6 +80,8 @@ To run the full application with the .NET API backend:
    - `POST /api/events` - Create new event
    - `PUT /api/events/{id}` - Update existing event
    - `DELETE /api/events/{id}` - Delete event
+   - `GET /api/events/backup` - Download the full event store for the backup account
+   - `POST /api/events/backup` - Replace the full event store from a JSON backup
    - `POST /api/mcp/token` - Issue an MCP token for the signed-in Google user
    - `POST /mcp` - Streamable HTTP MCP endpoint
    - `GET /health` - Health check
@@ -110,11 +113,20 @@ The API includes a remote, streamable HTTP MCP server at `/mcp`. An external AI
 client can use it to search, create, update, and delete calendar events. The
 available tools are:
 
+- `list_categories` — return the exact category names and display metadata
+  available to the application.
 - `search_events` — read events visible to the MCP identity.
 - `get_event` — read one visible event by ID.
 - `create_event` — create an event owned by the MCP identity.
 - `update_event` — update an event owned by the MCP identity.
 - `delete_event` — permanently delete an event owned by the MCP identity.
+
+Call `list_categories` before creating or updating an event and use the exact
+returned `name` value for its `category`. `search_events` also accepts that
+exact name through its optional `category` filter.
+
+When updating an event, title and date are required; any omitted optional field
+keeps its existing value.
 
 The browser UI continues to use Google cookie authentication. MCP clients do
 not have that browser cookie, so each signed-in user can issue a separate MCP
@@ -183,6 +195,58 @@ before, deploy the API and frontend, then:
    present.
 4. Click **Apply**, then restart the Web App.
 
+### Build the Azure deployment ZIP
+
+Run these commands from the repository root. The package contains the
+published API, the compiled frontend, the runtime category file, and the
+current `EventCalendar.API/Data/events.json` store:
+
+```powershell
+npm run build
+
+$stage = Join-Path (Get-Location) '.azure-package'
+$zip = Join-Path (Get-Location) 'EventCalendar-azure-deploy.zip'
+if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+
+dotnet publish EventCalendar.API/EventCalendar.API.csproj `
+  --configuration Release --output $stage
+
+$wwwroot = Join-Path $stage 'wwwroot'
+if (Test-Path -LiteralPath $wwwroot) { Remove-Item -LiteralPath $wwwroot -Recurse -Force }
+New-Item -ItemType Directory -Path $wwwroot | Out-Null
+Copy-Item -Path (Join-Path (Get-Location) 'dist\*') -Destination $wwwroot -Recurse -Force
+
+$developmentSettings = Join-Path $stage 'appsettings.Development.json'
+if (Test-Path -LiteralPath $developmentSettings) {
+  Remove-Item -LiteralPath $developmentSettings -Force
+}
+
+$data = Join-Path $stage 'Data'
+if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
+New-Item -ItemType Directory -Path $data | Out-Null
+Copy-Item -LiteralPath (Join-Path (Get-Location) 'EventCalendar.API\Data\events.json') `
+  -Destination (Join-Path $data 'events.json') -Force
+
+if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+```
+
+`EventCalendar.API/Data/events.json` is ignored by Git but is intentionally
+included in this deployment package. It may contain private events; review it
+before sharing the ZIP. Configure these Azure App Service settings before
+launching the app:
+
+- `OAuth__ClientId`
+- `OAuth__ClientSecret`
+- `Frontend__Origin` = `https://<your-app-name>.azurewebsites.net`
+
+You can deploy the resulting archive from the Azure Portal or with Azure CLI:
+
+```powershell
+az webapp deploy --resource-group <resource-group> --name <app-name> `
+  --src-path .\EventCalendar-azure-deploy.zip --type zip
+```
+
 The MCP URL is:
 
 ```text
@@ -191,6 +255,13 @@ https://<your-app-name>.azurewebsites.net/mcp
 
 Use HTTPS for any deployed MCP endpoint. If a token is exposed, sign out or
 restart the API to clear in-memory tokens, then issue a new token from the UI.
+
+### Event backup and restore
+
+The **BACKUP** and **UPLOAD** chips are shown only to the hard-coded backup
+account `rhenry74@gmail.com`. BACKUP downloads the complete `events.json` data
+store. UPLOAD replaces the server's event store after confirmation, so keep a
+known-good backup before restoring a file.
 
 ### Verify the endpoint
 
@@ -234,4 +305,4 @@ token for clients that support manually supplied bearer credentials.
 
 - **Frontend (Port 5173)**: Vite development server serving React app
 - **API Backend (Port 5115)**: .NET minimal API handling Google authentication and event authorization
-- **Data**: `EventCalendar.API/Data/events.json` stores local events and is ignored by Git. Legacy sample events are imported once as public events.
+- **Data**: `EventCalendar.API/Data/events.json` stores local events and is ignored by Git. Legacy sample events are imported once as public events. `public/categories.json` is copied into the deployed `wwwroot` and read at runtime by both the UI and MCP category tool.

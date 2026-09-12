@@ -22,6 +22,7 @@ dist-ssr/
 !.vscode/extensions.json
 .idea/
 *.suo
+*.csproj.user
 *.ntvs*
 *.njsproj
 *.sln
@@ -100,6 +101,7 @@ client_secret_2.json
 
 # Local calendar data includes private user events
 EventCalendar.API/Data/
+EventCalendar.API/obj/
 
 # Azure deployment output
 .azure-package/

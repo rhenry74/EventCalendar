@@ -13,4 +13,9 @@
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\public\categories.json" Link="wwwroot\categories.json"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

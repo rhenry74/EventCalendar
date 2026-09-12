@@ -44,8 +44,12 @@ var eventStorePath = builder.Configuration["Storage:EventStorePath"] ?? "Data/ev
 if (!Path.IsPathRooted(eventStorePath)) eventStorePath = Path.Combine(builder.Environment.ContentRootPath, eventStorePath);
 var legacyEventsPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "public", "events.json"));
 var store = new EventStore(eventStorePath, legacyEventsPath);
+var categoriesPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "categories.json");
+var developmentCategoriesPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "public", "categories.json"));
+var categoryStore = new CategoryStore(categoriesPath, developmentCategoriesPath);
 
 builder.Services.AddSingleton(store);
+builder.Services.AddSingleton(categoryStore);
 builder.Services.AddSingleton<McpTokenStore>();
 builder.Services.AddHttpContextAccessor();
 builder.Services
@@ -88,6 +92,27 @@ app.MapGet("/api/auth/me", (ClaimsPrincipal user) => Results.Ok(new
     name = user.Identity?.Name,
     email = user.FindFirstValue(ClaimTypes.Email)
 })).RequireAuthorization();
+
+app.MapGet("/api/events/backup", async (ClaimsPrincipal user) =>
+{
+    if (!IsBackupUser(user)) return Results.Forbid();
+    return Results.Json(await store.GetAllAsync());
+}).RequireAuthorization();
+
+app.MapPost("/api/events/backup", async (List<CalendarEvent> backup, ClaimsPrincipal user) =>
+{
+    if (!IsBackupUser(user)) return Results.Forbid();
+    if (backup.Any(item => string.IsNullOrWhiteSpace(item.Id)
+        || string.IsNullOrWhiteSpace(item.OwnerId)
+        || string.IsNullOrWhiteSpace(item.Title)
+        || string.IsNullOrWhiteSpace(item.Date)))
+    {
+        return Results.BadRequest(new { message = "The backup contains an event with a missing ID, owner, title, or date." });
+    }
+
+    await store.ReplaceAsync(backup);
+    return Results.NoContent();
+}).RequireAuthorization();
 
 app.MapPost("/api/mcp/token", (ClaimsPrincipal user, McpTokenStore tokenStore) =>
 {
@@ -158,6 +183,9 @@ app.Run();
 static string GetUserId(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.NameIdentifier)
     ?? throw new UnauthorizedAccessException("Google did not provide a user identifier.");
 
+static bool IsBackupUser(ClaimsPrincipal user) => string.Equals(
+    user.FindFirstValue(ClaimTypes.Email), "rhenry74@gmail.com", StringComparison.OrdinalIgnoreCase);
+
 static EventResponse ToResponse(CalendarEvent item, string userId) => new(item.Id, item.Title, item.Description ?? string.Empty,
     item.Date, item.Location, item.Category, item.IsPublic, item.OwnerName, item.OwnerId == userId,
     item.OwnerId == userId ? item.Journal ?? string.Empty : string.Empty, item.EndDate);
@@ -208,6 +236,8 @@ public sealed class EventStore(string filePath, string legacyEventsPath)
     public async Task<List<CalendarEvent>> GetVisibleEventsAsync(string userId) =>
         (await ReadAsync()).Where(item => item.IsPublic || item.OwnerId == userId).OrderBy(item => item.Date).ToList();
 
+    public Task<List<CalendarEvent>> GetAllAsync() => ReadAsync();
+
     public async Task<CalendarEvent?> GetByIdAsync(string id) => (await ReadAsync()).FirstOrDefault(item => item.Id == id);
 
     public async Task AddAsync(CalendarEvent item)
@@ -228,6 +258,13 @@ public sealed class EventStore(string filePath, string legacyEventsPath)
     {
         await Gate.WaitAsync();
         try { var all = await ReadUnsafeAsync(); all.RemoveAll(item => item.Id == id); await WriteUnsafeAsync(all); }
+        finally { Gate.Release(); }
+    }
+
+    public async Task ReplaceAsync(List<CalendarEvent> events)
+    {
+        await Gate.WaitAsync();
+        try { await WriteUnsafeAsync(events); }
         finally { Gate.Release(); }
     }
 
