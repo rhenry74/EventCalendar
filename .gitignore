@@ -54,6 +54,7 @@ Properties/launchSettings.json
 
 # Local configuration overrides
 appsettings.*.local
+appsettings.Development.json
 
 # Log files
 logs/
@@ -72,6 +73,7 @@ logs/
 .env.production.local
 
 # IDE workspace files
+.vs/
 .vscode/settings.json
 .vscode/tasks.json
 .vscode/launch.json

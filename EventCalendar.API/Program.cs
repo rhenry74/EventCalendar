@@ -3,6 +3,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using ModelContextProtocol.AspNetCore;
+using ModelContextProtocol.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 var frontendOrigin = builder.Configuration["Frontend:Origin"] ?? "http://localhost:5173";
@@ -38,17 +40,37 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 
+var eventStorePath = builder.Configuration["Storage:EventStorePath"] ?? "Data/events.json";
+if (!Path.IsPathRooted(eventStorePath)) eventStorePath = Path.Combine(builder.Environment.ContentRootPath, eventStorePath);
+var legacyEventsPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "public", "events.json"));
+var store = new EventStore(eventStorePath, legacyEventsPath);
+
+builder.Services.AddSingleton(store);
+builder.Services.AddSingleton<McpTokenStore>();
+builder.Services.AddHttpContextAccessor();
+builder.Services
+    .AddMcpServer(options => options.ServerInfo = new() { Name = "EventCalendar", Version = "1.0.0" })
+    .WithTools<CalendarMcpTools>()
+    .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless);
+
 var app = builder.Build();
+var mcpTokenStore = app.Services.GetRequiredService<McpTokenStore>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseCors("AllowVite");
 app.UseAuthentication();
 app.UseAuthorization();
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/mcp"))
+    {
+        await next();
+        return;
+    }
 
-var eventStorePath = builder.Configuration["Storage:EventStorePath"] ?? "Data/events.json";
-if (!Path.IsPathRooted(eventStorePath)) eventStorePath = Path.Combine(builder.Environment.ContentRootPath, eventStorePath);
-var legacyEventsPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "public", "events.json"));
-var store = new EventStore(eventStorePath, legacyEventsPath);
+    if (await McpApiKeyMiddleware.AuthenticateAsync(context, mcpTokenStore)) await next();
+});
+
 await store.InitializeAsync();
 
 app.MapGet("/api/auth/login", () => Results.Challenge(
@@ -66,6 +88,12 @@ app.MapGet("/api/auth/me", (ClaimsPrincipal user) => Results.Ok(new
     name = user.Identity?.Name,
     email = user.FindFirstValue(ClaimTypes.Email)
 })).RequireAuthorization();
+
+app.MapPost("/api/mcp/token", (ClaimsPrincipal user, McpTokenStore tokenStore) =>
+{
+    var token = tokenStore.Create(user);
+    return Results.Ok(new { token, userId = GetUserId(user) });
+}).RequireAuthorization();
 
 var events = app.MapGroup("/api/events").RequireAuthorization();
 
@@ -123,6 +151,7 @@ events.MapDelete("/{id}", async (string id, ClaimsPrincipal user) =>
 });
 
 app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Message = "EventCalendar API is running" }));
+app.MapMcp("/mcp");
 app.MapFallbackToFile("index.html");
 app.Run();
 

@@ -10,8 +10,15 @@ const calendarDateKey = (date: Date) => new Date(Date.UTC(
 )).toISOString().split('T')[0];
 
 const eventDateKey = (value: string) => {
+  // Date-only values represent a local calendar date. Avoid new Date('YYYY-MM-DD')
+  // here because JavaScript interprets that form as UTC midnight.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().split('T')[0];
+  if (Number.isNaN(parsed.getTime())) return null;
+  // Timed values are stored as instants (usually ISO UTC), but calendar
+  // placement should use the user's local date. Using toISOString() here can
+  // move a late-evening event onto the following UTC day.
+  return calendarDateKey(parsed);
 };
 
 const eventOccursOnDay = (event: Event, date: Date) => {

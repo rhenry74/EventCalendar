@@ -29,6 +29,14 @@ import categoriesData from '../../categories.json';
 
 const categories = categoriesData as Array<{ name: string; icon: string; type: string; primaryColor: string; secondaryColor: string }>;
 
+// Date-only event values are calendar dates, not UTC instants. Construct them
+// in local time so opening and saving an event does not shift it across a day.
+const parseEventDate = (value: string) => {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+  return new Date(value);
+};
+
 interface EventDialogProps {
   open: boolean;
   onClose: () => void;
@@ -59,9 +67,9 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       setDescription(initialEvent.description || '');
       setLocation(initialEvent.location || '');
       setCategory(initialEvent.category || 'General');
-      setDate(new Date(initialEvent.date));
+      setDate(parseEventDate(initialEvent.date));
       setHasTime(/[T ]\d{2}:\d{2}:[0-9]/.test(initialEvent.date) && !/[T ]00:00:00(?:\.000)?(?:Z)?$/.test(initialEvent.date));
-      setEndDate(initialEvent.endDate ? new Date(initialEvent.endDate) : null);
+      setEndDate(initialEvent.endDate ? parseEventDate(initialEvent.endDate) : null);
       setHasEndDate(!!initialEvent.endDate);
       setHasEndTime(!!initialEvent.endDate && /[T ]\d{2}:\d{2}:[0-9]/.test(initialEvent.endDate));
       setIsPublic(!!initialEvent.isPublic);
@@ -105,6 +113,13 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       alert("Title is required");
       return;
     }
+
+    const startDay = date ? format(date, 'yyyy-MM-dd') : '';
+    const endDay = endDate ? format(endDate, 'yyyy-MM-dd') : '';
+    if (hasEndDate && date && endDate && ((hasEndTime && endDate < date) || (!hasEndTime && endDay < startDay))) {
+      alert('End date and time must be after the start date and time.');
+      return;
+    }
     
     const eventData: PartialEvent = {
       id: initialEvent?.id || '',
@@ -137,13 +152,6 @@ const EventDialog: React.FC<EventDialogProps> = ({ open, onClose, initialEvent, 
       setJournal(value => `${value}${value ? '\n' : ''}${prefix}text${suffix}`);
       return;
     }
-    const startDay = date ? format(date, 'yyyy-MM-dd') : '';
-    const endDay = endDate ? format(endDate, 'yyyy-MM-dd') : '';
-    if (hasEndDate && date && endDate && ((hasEndTime && endDate < date) || (!hasEndTime && endDay < startDay))) {
-      alert('End date and time must be after the start date and time.');
-      return;
-    }
-
     const start = input.selectionStart;
     const end = input.selectionEnd;
     const selected = journal.slice(start, end) || 'text';
