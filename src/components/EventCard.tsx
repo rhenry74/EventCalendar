@@ -1,9 +1,8 @@
 import React from 'react';
 import type { Category, Event } from '../types';
-import { IconButton, Box, Typography } from '@mui/material';
+import { IconButton, Box, Link, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EventIcon from '@mui/icons-material/Event';
-import FenceIcon from '@mui/icons-material/Fence';
 import PublicIcon from '@mui/icons-material/Public';
 import type { Theme } from '@mui/material/styles';
 import { isTimedEventValue } from '../dateUtils';
@@ -111,13 +110,44 @@ const EventCard: React.FC<EventCardProps> = ({ event, categories, onDelete, onEd
             cursor: 'default'
           }}
         >
-          <span aria-hidden="true">{categoryIcon}</span> {event.category || 'General'}
-          {' · '}
-          {event.isPublic ? (
-            <PublicIcon fontSize="inherit" titleAccess="Public" aria-label="Public" />
-          ) : (
-            <FenceIcon fontSize="inherit" titleAccess="Private" aria-label="Private" />
-          )}
+          <Box component="span" aria-hidden="true" sx={{ display: 'inline-flex', alignItems: 'center', fontSize: '0.86rem', lineHeight: 1, verticalAlign: 'middle' }}>
+            {categoryIcon}
+          </Box>{' '}
+          {event.category || 'General'}
+          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', ml: 0.75, verticalAlign: 'middle' }}>
+            {event.isPublic ? (
+              <PublicIcon sx={{ fontSize: '0.86rem', color: '#0b6e99' }} titleAccess="Public" aria-label="Public" />
+            ) : (
+              <Box
+                component="span"
+                role="img"
+                aria-label="Private"
+                title="Private"
+                sx={{
+                  width: '0.86rem',
+                  height: '0.86rem',
+                  display: 'grid',
+                  gridTemplateRows: 'repeat(2, 1fr)',
+                  gap: '1px',
+                  padding: '1px',
+                  boxSizing: 'border-box',
+                  borderRadius: 0.25,
+                  backgroundColor: '#ffebe4',
+                  boxShadow: 'inset 0 0 0 1px rgba(105, 28, 20, 0.45)'
+                }}
+              >
+                <Box component="span" sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1px' }}>
+                  <Box component="span" sx={{ backgroundColor: '#b74335' }} />
+                  <Box component="span" sx={{ backgroundColor: '#b74335' }} />
+                </Box>
+                <Box component="span" sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px' }}>
+                  <Box component="span" sx={{ backgroundColor: '#b74335' }} />
+                  <Box component="span" sx={{ backgroundColor: '#b74335' }} />
+                  <Box component="span" sx={{ backgroundColor: '#b74335' }} />
+                </Box>
+              </Box>
+            )}
+          </Box>
         </Box>
 
         {/* Description - Spans all 3 columns */}
@@ -128,7 +158,15 @@ const EventCard: React.FC<EventCardProps> = ({ event, categories, onDelete, onEd
         {/* Location - Spans all 3 columns */}
         {location && (
           <Box sx={{ gridColumn: 'span 3', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', fontSize: { xs: '0.7rem', sm: '0.6rem' }, color: secondaryColor, cursor: 'default' }}>
-            {location}
+            <Link
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+              sx={{ color: 'inherit', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+            >
+              {location}
+            </Link>
           </Box>
         )}
 

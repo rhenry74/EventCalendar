@@ -61,6 +61,10 @@ function App() {
   }
 
   const deleteEvent = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this event?')) {
+      return
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE', credentials: 'include' })
       if (response.ok) {

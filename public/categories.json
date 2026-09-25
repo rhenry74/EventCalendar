@@ -44,5 +44,19 @@
   { "name": "Physical Therapy", "icon": "🏃‍♂️", "type": "Medical", "primaryColor": "#1F5F73", "secondaryColor": "#6FB8CF" },
   { "name": "Follow-Up", "icon": "🔁", "type": "Medical", "primaryColor": "#1F5F73", "secondaryColor": "#6FB8CF" },
   { "name": "Recovery", "icon": "🌙", "type": "Medical", "primaryColor": "#1F5F73", "secondaryColor": "#6FB8CF" },
-  { "name": "Hospital Stay", "icon": "🛏️", "type": "Medical", "primaryColor": "#1F5F73", "secondaryColor": "#6FB8CF" }
+  { "name": "Hospital Stay", "icon": "🛏️", "type": "Medical", "primaryColor": "#1F5F73", "secondaryColor": "#6FB8CF" },
+{
+  "name": "Football",
+  "icon": "🏈",
+  "type": "Lifestyle",
+  "primaryColor": "#255D60",
+  "secondaryColor": "#6AAEB1"
+},
+{
+  "name": "Baseball",
+  "icon": "⚾",
+  "type": "Lifestyle",
+  "primaryColor": "#2A6467",
+  "secondaryColor": "#74B5B8"
+}
 ]

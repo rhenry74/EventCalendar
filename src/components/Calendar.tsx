@@ -58,6 +58,7 @@ const Calendar: React.FC<CalendarProps> = ({ events, categories, onOpenDialog, o
   
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
+  const todayKey = calendarDateKey(new Date());
   
   // Days in current month
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -242,7 +243,25 @@ const Calendar: React.FC<CalendarProps> = ({ events, categories, onOpenDialog, o
               color: theme.palette.text.primary
             }}
           >
-            <span>{dayData.day}</span>
+            <Box
+              component="span"
+              sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: 28 }}
+            >
+              <Box
+                component="span"
+                sx={calendarDateKey(dayData.date) === todayKey ? {
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  backgroundColor: theme.palette.primary.main,
+                  color: theme.palette.primary.contrastText,
+                  fontWeight: 700
+                } : { display: 'inline-flex', alignItems: 'center', height: 28 }}
+              >{dayData.day}</Box>
+            </Box>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {dayData.events.map(event => (
                 <EventCard 
