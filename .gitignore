@@ -22,6 +22,7 @@ dist-ssr/
 !.vscode/extensions.json
 .idea/
 *.suo
+*.csproj.user
 *.ntvs*
 *.njsproj
 *.sln
@@ -54,6 +55,7 @@ Properties/launchSettings.json
 
 # Local configuration overrides
 appsettings.*.local
+appsettings.Development.json
 
 # Log files
 logs/
@@ -72,6 +74,7 @@ logs/
 .env.production.local
 
 # IDE workspace files
+.vs/
 .vscode/settings.json
 .vscode/tasks.json
 .vscode/launch.json
@@ -92,3 +95,14 @@ yarn.lock
 
 # Personal practice file
 practice.text
+
+# Local OAuth client credentials
+client_secret_2.json
+
+# Local calendar data includes private user events
+EventCalendar.API/Data/
+EventCalendar.API/obj/
+
+# Azure deployment output
+.azure-package/
+EventCalendar-azure-deploy.zip

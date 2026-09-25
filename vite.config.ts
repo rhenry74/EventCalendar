@@ -7,6 +7,15 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    watch: {
+      ignored: [
+        '**/.vs/**',
+        '**/bin/**',
+        '**/obj/**',
+        '**/.azure-package/**',
+        '**/Data/**'
+      ]
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:5115',
